@@ -1,5 +1,5 @@
 const {test,beforeEach}=require('node:test'),assert=require('node:assert/strict');
-process.env.SUPABASE_URL='https://example.invalid';process.env.SUPABASE_SECRET_KEY='test-only-not-a-credential';process.env.PIN_TO_WIN_ADMIN_SESSION_SECRET='admin-test-only-secret';process.env.PIN_TO_WIN_ADMIN_PASSWORD='test-only-password';process.env.PIN_TO_WIN_EVENT_ID='test-conference';
+process.env.SUPABASE_URL='https://example.invalid';process.env.SUPABASE_SECRET_KEY='test-only-not-a-credential';process.env.PIN_TO_WIN_ADMIN_SESSION_SECRET='admin-test-only-secret';process.env.PIN_TO_WIN_ADMIN_PASSWORD='test-only-password';process.env.PIN_TO_WIN_EVENT_ID='test-conference';process.env.PIN_TO_WIN_RATE_LIMIT='off';
 const {sign,COOKIE}=require('../lib/admin-auth'),handler=require('../api/admin-scores'),entryHandler=require('../api/eoi-admin');
 let requests=[];const cookie=()=>`${COOKIE}=${encodeURIComponent(sign({exp:Math.floor(Date.now()/1000)+60}))}`;
 async function call(action,{method='GET',body,query={},authenticated=true,headers={},api=handler}={}){let status=200,data,responseHeaders={};const res={status(value){status=value;return this},setHeader(k,v){responseHeaders[k]=v;return this},end(value){data=JSON.parse(value)}};await api({method,query:{action,...query},body,headers:{host:'pin.example',...(authenticated?{cookie:cookie()}:{}),...headers}},res);return {status,data,headers:responseHeaders};}
@@ -27,3 +27,14 @@ test('staff login uses configured password and an HttpOnly secure cookie; GET ca
  const r=await call('login',{api:entryHandler,method:'POST',authenticated:false,body:{password:'test-only-password'}});assert.equal(r.status,200);assert.match(r.headers['Set-Cookie'],/HttpOnly; Secure; SameSite=Strict/);assert.equal((await call('logout',{api:entryHandler})).status,405);assert.equal((await call('logout',{api:entryHandler,method:'POST'})).status,200);
 });
 test('cloud failure never reports moderation success',async()=>{global.fetch=async()=>Response.json({code:'failure'},{status:500});const r=await call('hide',{...post,body:{id:'00000000-0000-4000-8000-000000000001'}});assert.equal(r.status,503);assert.equal(r.data.ok,false);});
+test('review filter lists held scores and restoring one approves it',async()=>{
+ await call('list',{query:{visibility:'review'}});const q=new URL(requests[0].url);assert.equal(q.searchParams.get('hidden_at'),'not.is.null');assert.equal(q.searchParams.get('review_reason'),'not.is.null');assert(q.searchParams.get('select').includes('review_reason'));assert(q.searchParams.get('select').includes('organisation'));
+ const id='00000000-0000-4000-8000-000000000002';await call('restore',{...post,body:{id}});assert.deepEqual(JSON.parse(requests[1].opts.body),{hidden_at:null});
+});
+test('destination statistics aggregate errors per destination without exposing players',async()=>{
+ global.fetch=async(url,opts)=>{requests.push({url,opts});return Response.json([{mission_ids:['marree','wiluna','birdsville'],guesses:[{distanceKm:10,hint:true},{distanceKm:300}]},{mission_ids:['marree','boulia','cobar'],guesses:[{distanceKm:30}]}]);};
+ const r=await call('stats');assert.equal(r.status,200);const marree=r.data.rows.find(x=>x.id==='marree');assert.equal(marree.plays,2);assert.equal(marree.medianKm,20);assert.equal(marree.hintRate,.5);assert.equal(marree.within100,1);
+ assert.equal(r.data.rows.find(x=>x.id==='wiluna').plays,1);assert.equal(r.data.rows.find(x=>x.id==='birdsville').plays,0);
+ assert(!JSON.stringify(r.data).includes('full_name'));assert(!new URL(requests[0].url).searchParams.get('select').includes('email'));
+ assert.equal((await call('stats',{authenticated:false})).status,401);
+});
