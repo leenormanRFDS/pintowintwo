@@ -1,6 +1,12 @@
+const rules = require('../data/rules');
+const { rateLimited, clientIp } = require('../lib/game');
+
+// Only players who tick the contact box are recorded here. Leaderboard play alone is not an expression of interest.
+const CONSENT_VERSION = '2026-11-v1';
 
 function json(res, status, body) {
   res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
   res.end(JSON.stringify(body));
 }
 
@@ -9,7 +15,7 @@ function clean(value, max = 1000) {
 }
 
 function validEmail(value) {
-  return !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 module.exports = async function handler(req, res) {
@@ -17,6 +23,7 @@ module.exports = async function handler(req, res) {
     res.setHeader('Allow', 'POST');
     return json(res, 405, { ok: false, error: 'Method not allowed.' });
   }
+  if (rateLimited(clientIp(req) + ':eoi', 30)) return json(res, 429, { ok: false, error: 'Too many requests. Please wait a moment.' });
 
   try {
     let body = req.body;
@@ -25,16 +32,18 @@ module.exports = async function handler(req, res) {
       return json(res, 400, { ok: false, error: 'Invalid request.' });
     }
 
+    // Honeypot: a hidden field people never see. Pretend success for bots.
     const website = clean(body.website, 200);
     if (website) return json(res, 200, { ok: true });
 
     const clientId = clean(body.clientId, 120);
-    const fullName = clean(body.fullName || body.name, 120);
+    const fullName = rules.normaliseName(clean(body.fullName || body.name, 120));
     const email = clean(body.email, 320).toLowerCase();
-    const sourceUrl = clean(body.sourceUrl, 1000);
+    const organisation = rules.normaliseName(clean(body.organisation, 40));
 
+    if (body.contactOptIn !== true) return json(res, 400, { ok: false, error: 'Contact consent is required.' });
     if (!clientId || !fullName || !validEmail(email)) {
-      return json(res, 400, { ok: false, error: 'Please provide your name and a valid email if supplied.' });
+      return json(res, 400, { ok: false, error: 'Please provide your name and a valid email.' });
     }
 
     const supabaseUrl = String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
@@ -48,8 +57,11 @@ module.exports = async function handler(req, res) {
     const record = {
       client_id: clientId,
       full_name: fullName,
-      email: email || null,
-      source_url: sourceUrl || null,
+      email,
+      organisation: organisation || null,
+      contact_opt_in: true,
+      consent_version: CONSENT_VERSION,
+      source_url: clean(body.sourceUrl, 1000) || null,
       user_agent: clean(req.headers['user-agent'], 1000) || null
     };
 
@@ -59,7 +71,7 @@ module.exports = async function handler(req, res) {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'apikey': supabaseSecretKey,
-        ...(supabaseSecretKey.startsWith('eyJ')?{Authorization:`Bearer ${supabaseSecretKey}`}:{}),
+        ...(supabaseSecretKey.startsWith('eyJ') ? { Authorization: `Bearer ${supabaseSecretKey}` } : {}),
         'Prefer': 'return=minimal,resolution=ignore-duplicates'
       },
       body: JSON.stringify(record)
@@ -77,3 +89,5 @@ module.exports = async function handler(req, res) {
     return json(res, 500, { ok: false, error: 'We could not save your details.' });
   }
 };
+
+module.exports.CONSENT_VERSION = CONSENT_VERSION;

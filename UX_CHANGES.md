@@ -27,3 +27,28 @@ The main board now ranks completed games across all dates, including existing sa
 ## Admin management
 
 Top-right staff sign-in opens the password-protected dashboard in a separate tab. Staff can download the public high-score table, export all pages of game history and captured entries, remove/restore attempts, and clear completed high scores after typed confirmation. Clearing archives records without deleting them. Active games are preserved; removed games are excluded by the database ranking functions, so another sync cannot put them back. Staff can still retrieve removed records and device backups. API tests cover authentication, same-origin mutation controls, validation, paging and failure responses; browser checks cover sign-in, CSV exports, removal, restore, clear/cancel and sign-out at a landscape iPad viewport.
+
+## v1.3 — engagement, fairness and integrity
+
+- **Mission summary** after flight 3: final score, rank title (Cadet → Chief Pilot), points to the next rank, all-time and today position ("#12 of 230"), per-flight recap, badges (Bullseye, Pinpoint, Clean sweep, Unassisted, Outback ace) and an optional donate/regular-giving call to action.
+- **Touch precision:** zoom up to 8× (was 4×) and a magnifier above the finger while dragging. The scoring curve is smooth, with no 100-point cliffs.
+- **Fair draws:** every game climbs from an easier to a harder destination across three RFDS sections.
+- **Hint:** shades a 300 km area containing the destination, for −150 points.
+- **Tasking briefing** before each flight, using the previously unused scenario copy (now including Top End and Central Australian taskings). It is skippable and auto-continues after about 4 seconds.
+- **Result screen:** one hero number. The map auto-frames your pin and the destination, and shows where other players pinned, with "closer than X% of N pilots".
+- **Leaderboards:** All-time, Today and Teams tabs, plus a read-only big-screen board (`/board.html`) that rotates and highlights new entries.
+- **Integrity:** implausible scores (too fast, near-perfect, very high offline) are saved but held for staff review. There is also per-instance rate limiting and guest de-duplication by name and device.
+- **Consent:** a leaderboard display name with a blocklist, an optional organisation, a collection notice with a privacy-policy link, and a separate contact opt-in checkbox. Only opted-in players become contact entries. A honeypot field is now in the form.
+- **Kiosk:** idle reset, a "Still flying?" prompt mid-game, an in-app leave dialog in place of the native `confirm()`, a 20-minute resume window with Discard, and a smaller header while flying.
+- **Offline shell:** a network-first service worker and web app manifest, so the game reloads on dropped Wi-Fi.
+- **Fixes and cleanup:**
+  - Fixed the undefined `--rfds-orange` variable that could blank tapped buttons on iPad.
+  - Map outlines are now stored once and reused (`index.html` went from 127 KB to 74 KB).
+  - Removed six unused map assets.
+  - Corrected the README (93 destinations) and NT notes (Darwin and Alice Springs bases).
+- **Staff:**
+  - New review queue with one-click approval.
+  - Organisation and review notes in exports.
+  - New destination-difficulty statistics.
+  - Contact consent shown per entry.
+- **Developer:** `npm run dev` runs the real API against an in-memory database. There are now 31 automated tests, and the SQL migration was verified twice-applied against Postgres.

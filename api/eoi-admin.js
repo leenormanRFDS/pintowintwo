@@ -60,7 +60,7 @@ module.exports = async function handler(req, res) {
 
     const offset=Number(req.query?.offset||0);
     if(!Number.isSafeInteger(offset)||offset<0)return json(res,400,{ok:false,error:'Invalid page.'});
-    const query = encodeURIComponent('id,client_id,submitted_at,full_name,email,source_url');
+    const query = encodeURIComponent('id,client_id,submitted_at,full_name,email,organisation,contact_opt_in,consent_version,source_url');
     const response = await fetch(`${supabaseUrl}/rest/v1/pin_to_win_eois?select=${query}&order=submitted_at.desc,id.desc&offset=${offset}&limit=501`, {
       headers: {
         'Accept': 'application/json',
