@@ -44,14 +44,15 @@ create or replace function public.pin_to_win_team_board(event_key text, day_key 
 returns table(team text, players bigint, average_score integer, top_score integer)
 language sql stable security invoker set search_path = '' as $$
   with best as (
-    select distinct on (g.player_id) g.player_id, g.organisation, g.score
+    select distinct on (g.player_id) g.player_id, g.organisation, g.score, g.total_distance
     from public.pin_to_win_games g
     where g.event_id = event_key and g.completed and g.hidden_at is null
       and nullif(trim(g.organisation), '') is not null
       and (day_key is null or g.event_day = day_key)
     order by g.player_id, g.score desc, g.total_distance asc, g.started_at asc, g.id
   )
-  select min(trim(b.organisation)) as team, count(*) as players,
+  -- Shown under the spelling the team's top scorer entered.
+  select (array_agg(trim(b.organisation) order by b.score desc, b.total_distance asc))[1] as team, count(*) as players,
          round(avg(b.score))::integer as average_score, max(b.score) as top_score
   from best b
   group by lower(trim(b.organisation))
